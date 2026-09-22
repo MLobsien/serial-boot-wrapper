@@ -4,11 +4,13 @@
 # All UART and loader parameters map to the package's build-time
 # configuration (see nix/serial-boot.nix). Changing any option rebuilds
 # the wrapper with different firmware-side line settings.
-{ config, lib, pkgs, ... }:
-
-with lib;
-
-let
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+with lib; let
   cfg = config.boot.loader.systemd-boot.serialBoot;
 
   serialBootPackage = let
@@ -17,7 +19,8 @@ let
     };
     # Filter out null values so unspecified options use package defaults
     filtered = filterAttrs (_: v: v != null) args;
-  in (pkgs.callPackage ./nix/serial-boot.nix filtered).overrideAttrs (old: {});
+  in
+    pkgs.callPackage ./nix/serial-boot.nix filtered;
 
   entryFile = cfg.entryName;
 in {
@@ -58,7 +61,7 @@ in {
     };
 
     parity = mkOption {
-      type = types.enum [ "none" "odd" "even" ];
+      type = types.enum ["none" "odd" "even"];
       default = "none";
       description = "Parity mode.";
     };
