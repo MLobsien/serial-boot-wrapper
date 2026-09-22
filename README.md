@@ -50,10 +50,13 @@ The output will be at `result/EFI/serial-boot/serial-bootx64.efi`.
 ### Configuration
 
 All UART and loader parameters are Nix arguments of the package and are
-compiled into the EFI binary through a generated `config.h`:
+compiled into the EFI binary through a generated `config.h`. Build a
+variant with `nix repl`, a callPackage-style expression, or directly:
 
 ```bash
-nix build .#serial-boot.override {
+nix build --impure --expr 'let
+  flake = builtins.getFlake "github:MLobsien/serial-boot-wrapper";
+in flake.packages.x86_64-linux.serial-boot.override {
   uartBase = 760;        # 0x2F8 = COM2 (760). COM1 = 1016 = 0x3F8
   baudRate = 9600;
   uartClock = 1843200;   # standard UART clock; must be divisible by 16*baudRate
@@ -62,7 +65,7 @@ nix build .#serial-boot.override {
   stopBits = 1;          # 1 or 2
   loaderPath = "\\EFI\\systemd\\systemd-bootx64.efi";
   bootTitle = "Serial console";
-}
+}'
 ```
 
 All options have sensible defaults (COM1, 115200 8N1, systemd-boot path).
