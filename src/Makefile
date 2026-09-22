@@ -61,7 +61,7 @@ $(SO_APP): $(OBJ)
 
 # Convert ELF to PE/COFF EFI application
 $(EFI_APP): $(SO_APP)
-	$(OBJCOPY) -I elf64-x86-64 -j .text -j .sdata -j .data -j .dynamic -j .dynsym -j .rel -j .rela -j .reloc --output-target=efi-app-x86-64 $< $@
+	$(OBJCOPY) -I elf64-x86-64 -j .text -j .rodata -j .sdata -j .data -j .dynamic -j .dynsym -j .rel -j .rela -j .reloc --output-target=efi-app-x86-64 $< $@
 
 clean:
 	rm -f $(OBJ) $(SO_APP) $(EFI_APP) $(EFI_APP).debug
