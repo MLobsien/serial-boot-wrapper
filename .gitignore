@@ -2,3 +2,5 @@
 *.efi
 *.so
 result/
+result
+.omo/
