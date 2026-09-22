@@ -139,11 +139,14 @@ systemd-boot integration.
 
 3. Create boot entry:
    ```bash
-   sudo tee /boot/loader/entries/serial-boot-test.conf << EOF
-   title systemd-boot serial test
+   sudo tee /boot/loader/entries/serial-boot.conf << EOF
+   title Serial console (systemd-boot)
    efi /EFI/serial-boot/serial-bootx64.efi
    EOF
    ```
+
+   (This is the same entry the NixOS module creates by default; the name
+   matches the module's `entryName` default.)
 
 ## Testing
 
@@ -163,16 +166,18 @@ boot entry available.
 
 2. Reboot the machine
 
-3. Select the "systemd-boot serial test" entry from the boot menu
+3. Select the "Serial console (systemd-boot)" entry from the boot menu
 
-4. Expected serial output:
+4. Expected serial output (default build):
    ```
    [serial-boot] wrapper started
-   [serial-boot] UART initialized: 3F8 / 115200 8N1
-   [serial-boot] loading systemd-boot...
-   [serial-boot] Loaded systemd-boot: XXXX bytes
-   [serial-boot] Starting systemd-boot...
+   [serial-boot] UART initialized at 1016 (115200 baud)
+   [serial-boot] loading loader...
+   [serial-boot] loaded loader image: XXXX bytes
+   [serial-boot] starting loader...
    ```
+
+   (The UART base is printed as a decimal number: 1016 = 0x3F8 = COM1.)
 
 5. The serial terminal should then receive actual systemd-boot output/menu text
 
@@ -188,7 +193,7 @@ The existing boot entry must remain usable. If the wrapper crashes or fails, the
 
 To remove the test configuration:
 ```bash
-sudo rm /boot/loader/entries/serial-boot-test.conf
+sudo rm /boot/loader/entries/serial-boot.conf
 sudo rm -rf /boot/EFI/serial-boot
 ```
 
