@@ -442,113 +442,9 @@ static void init_proxy_conout(void)
  * This works for any device the firmware can read (ESP or otherwise);
  * no disk or partition UUID is hardcoded.
  */
-static EFI_STATUS open_self_volume(EFI_HANDLE image_handle,
-                                   EFI_FILE_IO_INTERFACE **volume)
-{
-    EFI_STATUS status;
-    EFI_LOADED_IMAGE_PROTOCOL *loaded_image = NULL;
-
-    status = gBS->HandleProtocol(
-        image_handle,
-        &gEfiLoadedImageProtocolGuid,
-        (VOID **)&loaded_image
-    );
-    if (EFI_ERROR(status)) {
-        uart_puts("[serial-boot] ERROR: Failed to get loaded image protocol\n");
-        return status;
-    }
-
-    if (loaded_image->DeviceHandle == NULL) {
-        uart_puts("[serial-boot] ERROR: NULL device handle\n");
-        return EFI_UNSUPPORTED;
-    }
-
-    status = gBS->HandleProtocol(
-        loaded_image->DeviceHandle,
-        &gEfiSimpleFileSystemProtocolGuid,
-        (VOID **)volume
-    );
-    if (EFI_ERROR(status)) {
-        uart_puts("[serial-boot] ERROR: No SimpleFileSystem on our device\n");
-        return status;
-    }
-
-    return EFI_SUCCESS;
-}
-
 /**
  * Read a full file from a volume. Caller frees *buffer.
  */
-static EFI_STATUS read_file(EFI_FILE_HANDLE root, CHAR16 *path,
-                            VOID **buffer, UINTN *buffer_size)
-{
-    EFI_STATUS status;
-    EFI_FILE_HANDLE file = NULL;
-    UINTN info_size = 0;
-    EFI_FILE_INFO *info = NULL;
-    VOID *data = NULL;
-
-    status = root->Open(root, &file, path, EFI_FILE_MODE_READ, 0);
-    if (EFI_ERROR(status)) {
-        uart_puts("[serial-boot] ERROR: cannot open loader binary\n");
-        return status;
-    }
-
-    /* First GetInfo call with size 0 must return EFI_BUFFER_TOO_SMALL and
-     * set info_size to the required size. */
-    status = file->GetInfo(file, &GenericFileInfo, &info_size, NULL);
-    if (status != EFI_BUFFER_TOO_SMALL || info_size == 0) {
-        uart_puts("[serial-boot] ERROR: GetInfo(size probe) failed\n");
-        file->Close(file);
-        return EFI_ABORTED;
-    }
-
-    info = AllocatePool(info_size);
-    if (info == NULL) {
-        uart_puts("[serial-boot] ERROR: cannot allocate file info\n");
-        file->Close(file);
-        return EFI_OUT_OF_RESOURCES;
-    }
-
-    status = file->GetInfo(file, &GenericFileInfo, &info_size, info);
-    if (EFI_ERROR(status)) {
-        uart_puts("[serial-boot] ERROR: GetInfo failed\n");
-        FreePool(info);
-        file->Close(file);
-        return status;
-    }
-
-    if (info->FileSize == 0) {
-        uart_puts("[serial-boot] ERROR: loader file is empty\n");
-        FreePool(info);
-        file->Close(file);
-        return EFI_ABORTED;
-    }
-
-    *buffer_size = (UINTN)info->FileSize;
-    FreePool(info);
-    info = NULL;
-
-    data = AllocatePool(*buffer_size);
-    if (data == NULL) {
-        uart_puts("[serial-boot] ERROR: cannot allocate file buffer\n");
-        file->Close(file);
-        return EFI_OUT_OF_RESOURCES;
-    }
-
-    status = file->Read(file, buffer_size, data);
-    if (EFI_ERROR(status)) {
-        uart_puts("[serial-boot] ERROR: Read failed\n");
-        FreePool(data);
-        file->Close(file);
-        return status;
-    }
-
-    file->Close(file);
-    *buffer = data;
-    return EFI_SUCCESS;
-}
-
 /**
  * Print an unsigned number in decimal over the UART
  */
@@ -580,46 +476,38 @@ static void uart_put_uint(UINTN value)
 static EFI_STATUS load_systemd_boot(EFI_HANDLE image_handle)
 {
     EFI_STATUS status;
-    EFI_FILE_IO_INTERFACE *volume = NULL;
-    EFI_FILE_HANDLE root = NULL;
-    VOID *buffer = NULL;
-    UINTN size = 0;
     EFI_HANDLE new_image = NULL;
 
-    /* Open the volume this wrapper was started from (no hardcoded UUIDs) */
-    status = open_self_volume(image_handle, &volume);
-    if (EFI_ERROR(status))
-        return status;
+    /* Load through the firmware with an explicit device path so the loader
+     * gets a valid DeviceHandle (required to find its menu entries). */
+    EFI_LOADED_IMAGE_PROTOCOL *loaded_image = NULL;
+    EFI_DEVICE_PATH *file_dp = NULL;
 
-    status = volume->OpenVolume(volume, &root);
+    status = gBS->HandleProtocol(
+        image_handle,
+        &gEfiLoadedImageProtocolGuid,
+        (VOID **)&loaded_image
+    );
     if (EFI_ERROR(status)) {
-        uart_puts("[serial-boot] ERROR: OpenVolume failed\n");
+        uart_puts("[serial-boot] ERROR: cannot get LoadedImage\n");
         return status;
     }
 
-    status = read_file(root, CONFIG_LOADER_PATH, &buffer, &size);
-    root->Close(root);
-    if (EFI_ERROR(status))
-        return status;
+    file_dp = FileDevicePath(loaded_image->DeviceHandle, (CHAR16 *)CONFIG_LOADER_PATH);
+    if (file_dp == NULL) {
+        uart_puts("[serial-boot] ERROR: no device path for loader\n");
+        return EFI_INVALID_PARAMETER;
+    }
 
-    uart_puts("[serial-boot] loaded loader image: ");
-    uart_put_uint(size);
-    uart_puts(" bytes\n");
-
-    /* Load the image from the buffer. We pass no device path; the firmware
-     * records our own image as the parent. */
     status = gBS->LoadImage(
-        FALSE,          /* BootPolicy: not booting the default loader */
+        TRUE,           /* BootPolicy: the loader IS the boot target */
         image_handle,
-        NULL,           /* no device path, loading from memory buffer */
-        buffer,
-        size,
+        file_dp,
+        NULL,
+        0,
         &new_image
     );
-
-    /* The firmware has copied the image into its own memory by now */
-    FreePool(buffer);
-    buffer = NULL;
+    FreePool(file_dp);
 
     if (EFI_ERROR(status)) {
         uart_puts("[serial-boot] ERROR: LoadImage failed\n");
