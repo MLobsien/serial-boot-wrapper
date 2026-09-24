@@ -1,7 +1,7 @@
 {
   lib,
   stdenv,
-  gnu-efi,
+  callPackage,
   gcc,
   binutils,
   uartBase ? 1016, # 0x3F8 = COM1
@@ -72,13 +72,12 @@
   # built (i.e. on any use of the package).
   validation = dataBitsCheck && stopBitsCheck && divisorCheck && (parityNum >= 0);
 in
+  let gnuEfiMs = callPackage ./gnu-efi-ms.nix {}; in
   stdenv.mkDerivation {
     pname = "serial-boot-wrapper";
     version = "0.1.0";
 
     src = ./..;
-
-    nativeBuildInputs = [gnu-efi gcc binutils];
 
     # Disable all hardening: PIC changes codegen for the freestanding EFI
     # build and stack-protector/fortify pull in glibc symbols.
@@ -109,8 +108,8 @@ in
         CC="${stdenv.cc.targetPrefix}gcc" \
         LD="${stdenv.cc.targetPrefix}ld" \
         OBJCOPY="${binutils}/bin/objcopy" \
-        EFIINC="${gnu-efi}/include/efi" \
-        EFILIB="${gnu-efi}/lib" \
+        EFIINC="${gnuEfiMs}/include" \
+        EFILIB="${gnuEfiMs}/lib" \
         ARCH=x86_64 \
         CONFIGDIR="$PWD/config"
     '';

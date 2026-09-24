@@ -11,11 +11,13 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         serialBoot = pkgs.callPackage ./nix/serial-boot.nix {};
+        gnuEfiMs = pkgs.callPackage ./nix/gnu-efi-ms.nix {};
       in
       {
         packages = {
           default = serialBoot;
           serial-boot = serialBoot;
+          gnu-efi-msabi = gnuEfiMs;
         };
 
         checks = {
