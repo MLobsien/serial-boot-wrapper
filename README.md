@@ -157,6 +157,13 @@ systemd-boot menu text appears on the serial console. Hardware behavior
 (screen + serial mirroring on a real GPU/UART setup) still needs testing.
 Keep the normal boot entry available until then.
 
+### Observed QEMU/OVMF output
+
+With OVMF (no firmware serial console configured) booting an ESP with the
+wrapper as `\EFI\BOOT\BOOTX64.EFI`, systemd-boot and its default entry:
+menu rendering (ANSI cursor positioning, box drawing, countdown "Boot in
+Ns") arrives on the polled serial terminal, concurrently with the screen.
+
 ### Hardware Test Procedure
 
 1. Connect a serial terminal at the configured line parameters (default
