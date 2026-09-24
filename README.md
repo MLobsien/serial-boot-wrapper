@@ -92,7 +92,7 @@ Add the serial-boot module to your NixOS configuration:
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    serial-boot.url = "github:your-username/serial-boot-wrapper";
+    serial-boot.url = "github:MLobsien/serial-boot-wrapper";
   };
 
   outputs = { self, nixpkgs, serial-boot, ... }: {
