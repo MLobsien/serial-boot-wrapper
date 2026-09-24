@@ -150,11 +150,12 @@ systemd-boot integration.
 
 ## Testing
 
-**Status: not yet tested on target hardware.** The QEMU/OVMF test used to
-verify systemd-boot integration showed a gnu-efi application-start issue in
-the test environment that has not been resolved; the wrapper is untested in
-firmware. Test before trusting it on any hardware, and keep the normal
-boot entry available.
+**Status: verified end-to-end in QEMU/OVMF; not yet tested on target
+hardware.** The QEMU/OVMF harness boots the wrapper, which init's the UART,
+chainloads systemd-boot via `LoadImage` with an explicit device path, and the
+systemd-boot menu text appears on the serial console. Hardware behavior
+(screen + serial mirroring on a real GPU/UART setup) still needs testing.
+Keep the normal boot entry available until then.
 
 ### Hardware Test Procedure
 
@@ -173,7 +174,6 @@ boot entry available.
    [serial-boot] wrapper started
    [serial-boot] UART initialized at 1016 (115200 baud)
    [serial-boot] loading loader...
-   [serial-boot] loaded loader image: XXXX bytes
    [serial-boot] starting loader...
    ```
 
@@ -231,10 +231,24 @@ The wrapper installs a proxy `EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL` that:
 
 The wrapper:
 1. Locates the ESP containing itself using `EFI_LOADED_IMAGE_PROTOCOL`
-2. Opens `\EFI\systemd\systemd-bootx64.efi` from the same filesystem
-3. Loads the image using `gBS->LoadImage()`
+2. Builds an explicit device path for `\EFI\systemd\systemd-bootx64.efi`
+   with `FileDevicePath()` (a memory-buffer `LoadImage` call would leave the
+   new image without a `DeviceHandle`, which systemd-boot needs to open its
+   volume and find menu entries)
+3. Loads the image via `gBS->LoadImage()` with that device path
 4. Installs the ConOut proxy
 5. Starts the image using `gBS->StartImage()`
+
+### gnu-efi MS-ABI build
+
+The wrapper is compiled with `-DGNU_EFI_USE_MS_ABI` so every firmware-facing
+call uses the Microsoft x64 calling convention. `nix/gnu-efi-ms.nix` rebuilds
+gnu-efi from the nixpkgs source with that define forced on, stdenv hardening
+disabled, and the `EFIAPI` marker restored on `efi_main` in `lib/entry.c`
+(this keeps `_entry` a plain SysV function that hands firmware-provided
+`rcx`/`rdx` arguments through a GCC-emitted calling-convention adapter into
+`efi_main`). Using the stock nixpkgs gnu-efi with these flags produces a
+wrapper that fails during `InitializeLib`.
 
 ## License
 
