@@ -146,13 +146,8 @@ in {
       # of the file, and rewrites the file as:
       #   default ${entryFile} \n <everything else>
       # using only exact literals, no regex substitution.
-      boot.loader.systemd-boot.extraInstallCommands = let
-        loaderConf = "${config.boot.loader.efi.efiSysMountPoint}/loader/loader.conf";
-      in ''
-        {
-          echo "default ${entryFile}"
-          ${pkgs.gnugrep}/bin/grep -v "^default nixos-generation-" "${loaderConf}"
-        } > ${loaderConf}
+      boot.loader.systemd-boot.extraInstallCommands = ''
+        ${pkgs.gnused}/bin/sed -i "s|^default nixos-generation-.*|default ${entryFile}|" "${config.boot.loader.efi.efiSysMountPoint}/loader/loader.conf"
       '';
     };
 }
