@@ -2,7 +2,6 @@
   lib,
   stdenv,
   callPackage,
-  gcc,
   binutils,
   uartBase ? 1016, # 0x3F8 = COM1
   baudRate ? 115200,
@@ -71,8 +70,9 @@
   # Combine all validation results; forced when the drv attribute set is
   # built (i.e. on any use of the package).
   validation = dataBitsCheck && stopBitsCheck && divisorCheck && (parityNum >= 0);
+in let
+  gnuEfiMs = callPackage ./gnu-efi-ms.nix {};
 in
-  let gnuEfiMs = callPackage ./gnu-efi-ms.nix {}; in
   stdenv.mkDerivation {
     pname = "serial-boot-wrapper";
     version = "0.1.0";
