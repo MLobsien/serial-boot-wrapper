@@ -118,60 +118,41 @@ in {
     };
   };
 
-  config = mkIf cfg.enable {
-    # Add the serial-boot wrapper to systemd-boot extra files
-    boot.loader.systemd-boot.extraFiles = {
-      "EFI/serial-boot/serial-bootx64.efi" = "${serialBootPackage}/EFI/serial-boot/serial-bootx64.efi";
-    };
+  config =
+    mkIf cfg.enable {
+      # Add the serial-boot wrapper to systemd-boot extra files
+      boot.loader.systemd-boot.extraFiles = {
+        "EFI/serial-boot/serial-bootx64.efi" = "${serialBootPackage}/EFI/serial-boot/serial-bootx64.efi";
+      };
 
-    # Create a boot entry for the wrapper
-    boot.loader.systemd-boot.extraEntries = mkIf cfg.createTestEntry {
-      ${entryFile} = ''
-        title ${cfg.bootTitle}
-        efi /EFI/serial-boot/serial-bootx64.efi
-      '';
-    };
-  } // mkIf (cfg.enable && cfg.setDefault) {
-    # The upstream builder (systemd-boot-builder.py) writes exactly one
-    # default line of the form "default nixos-generation-<N>.conf"
-    # (optionally with a specialisation suffix) on every switch. Make the
-    # wrapper entry the default by replacing that line with the wrapper
-    # entry, leaving all other loader.conf lines untouched.
-    #
-    # The generation number is only known at switch time, so the script
-    # reads the exact current default line (anchored to the builder's
-    # known "default nixos-generation-" prefix), splits it from the rest
-    # of the file, and rewrites the file as:
-    #   <comment> \n default ${entryFile} \n <everything else>
-    # using only exact literals, no regex substitution.
-    boot.loader.systemd-boot.extraInstallCommands = let
-      loaderConf = "${config.boot.loader.efi.efiSysMountPoint}/loader/loader.conf";
-      setDefaultScript = pkgs.writeShellScript "set-serial-boot-default" ''
-        set -euo pipefail
-        conf=${loaderConf}
-        tmp=$(mktemp "$(dirname "$conf")/loader.conf.serial-boot.XXXXXX")
-        trap 'rm -f "$tmp"' EXIT
-
-        # The builder's default line always starts with this exact prefix.
-        prefix='default nixos-generation-'
-
-        # Refuse to touch anything the upstream builder did not write.
-        if ! ${pkgs.gnugrep}/bin/grep -q "^''${prefix}" "$conf"; then
-          echo "serial-boot: no '$prefix' line in loader.conf, refusing to set default" >&2
-          exit 1
-        fi
-
-        # Move the wrapper entry first; drop the builder's default line.
+      # Create a boot entry for the wrapper
+      boot.loader.systemd-boot.extraEntries = mkIf cfg.createTestEntry {
+        ${entryFile} = ''
+          title ${cfg.bootTitle}
+          efi /EFI/serial-boot/serial-bootx64.efi
+        '';
+      };
+    }
+    // mkIf (cfg.enable && cfg.setDefault) {
+      # The upstream builder (systemd-boot-builder.py) writes exactly one
+      # default line of the form "default nixos-generation-<N>.conf"
+      # (optionally with a specialisation suffix) on every switch. Make the
+      # wrapper entry the default by replacing that line with the wrapper
+      # entry, leaving all other loader.conf lines untouched.
+      #
+      # The generation number is only known at switch time, so the script
+      # reads the exact current default line (anchored to the builder's
+      # known "default nixos-generation-" prefix), splits it from the rest
+      # of the file, and rewrites the file as:
+      #   default ${entryFile} \n <everything else>
+      # using only exact literals, no regex substitution.
+      boot.loader.systemd-boot.extraInstallCommands = let
+        loaderConf = "${config.boot.loader.efi.efiSysMountPoint}/loader/loader.conf";
+      in ''
         {
-          echo "# default set by serial-boot-wrapper module"
           echo "default ${entryFile}"
-          ${pkgs.gnugrep}/bin/grep -v "^''${prefix}" "$conf"
-        } > "$tmp"
-
-        cat "$tmp" > "$conf"
+          grep -v "^default nixos-generation-" "${loaderConf}"
+        } > ${loaderConf}
       '';
-    in ''
-      ${setDefaultScript}
-    '';
-  };
+    };
 }
