@@ -151,7 +151,7 @@ in {
       in ''
         {
           echo "default ${entryFile}"
-          grep -v "^default nixos-generation-" "${loaderConf}"
+          ${pkgs.gnugrep}/bin/grep -v "^default nixos-generation-" "${loaderConf}"
         } > ${loaderConf}
       '';
     };
