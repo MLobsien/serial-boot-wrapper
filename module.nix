@@ -101,6 +101,21 @@ in {
         Whether the module should add a systemd-boot entry for the wrapper.
       '';
     };
+
+    setDefault = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Make the wrapper entry the default systemd-boot boot target.
+
+        The upstream builder hardcodes "default <newest NixOS generation>"
+        into loader.conf on every switch and offers no option to change
+        it, so this installs an extra install command that swaps that
+        single known line for the wrapper entry, preserving all other
+        loader.conf settings. It only ever matches the exact
+        builder-generated line and aborts if it is absent.
+      '';
+    };
   };
 
   config = mkIf cfg.enable {
@@ -116,5 +131,47 @@ in {
         efi /EFI/serial-boot/serial-bootx64.efi
       '';
     };
+  } // mkIf (cfg.enable && cfg.setDefault) {
+    # The upstream builder (systemd-boot-builder.py) writes exactly one
+    # default line of the form "default nixos-generation-<N>.conf"
+    # (optionally with a specialisation suffix) on every switch. Make the
+    # wrapper entry the default by replacing that line with the wrapper
+    # entry, leaving all other loader.conf lines untouched.
+    #
+    # The generation number is only known at switch time, so the script
+    # reads the exact current default line (anchored to the builder's
+    # known "default nixos-generation-" prefix), splits it from the rest
+    # of the file, and rewrites the file as:
+    #   <comment> \n default ${entryFile} \n <everything else>
+    # using only exact literals, no regex substitution.
+    boot.loader.systemd-boot.extraInstallCommands = let
+      loaderConf = "${config.boot.loader.efi.efiSysMountPoint}/loader/loader.conf";
+      setDefaultScript = pkgs.writeShellScript "set-serial-boot-default" ''
+        set -euo pipefail
+        conf=${loaderConf}
+        tmp=$(mktemp "$(dirname "$conf")/loader.conf.serial-boot.XXXXXX")
+        trap 'rm -f "$tmp"' EXIT
+
+        # The builder's default line always starts with this exact prefix.
+        prefix='default nixos-generation-'
+
+        # Refuse to touch anything the upstream builder did not write.
+        if ! ${pkgs.gnugrep}/bin/grep -q "^''${prefix}" "$conf"; then
+          echo "serial-boot: no '$prefix' line in loader.conf, refusing to set default" >&2
+          exit 1
+        fi
+
+        # Move the wrapper entry first; drop the builder's default line.
+        {
+          echo "# default set by serial-boot-wrapper module"
+          echo "default ${entryFile}"
+          ${pkgs.gnugrep}/bin/grep -v "^''${prefix}" "$conf"
+        } > "$tmp"
+
+        cat "$tmp" > "$conf"
+      '';
+    in ''
+      ${setDefaultScript}
+    '';
   };
 }
